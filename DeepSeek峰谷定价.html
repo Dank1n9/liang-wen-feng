@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepSeek 峰谷定价</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    min-height: 100vh;
+    background: radial-gradient(1200px 600px at 20% -10%, #1a3a5c 0%, transparent 60%),
+                radial-gradient(1000px 500px at 110% 110%, #0f2c4a 0%, transparent 55%),
+                #0b1424;
+    color: #e8f1fb;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+  }
+  .glow {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 1.5s ease;
+  }
+  .peak-glow {
+    background: radial-gradient(1200px 600px at 20% -10%, #8c2626 0%, transparent 60%),
+                radial-gradient(1000px 500px at 110% 110%, #6b1a1a 0%, transparent 55%),
+                #3a1212;
+  }
+  .valley-glow {
+    background: radial-gradient(1200px 600px at 20% -10%, #17482f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 110% 110%, #0f3a24 0%, transparent 55%),
+                #122b1c;
+  }
+  body.peak   .peak-glow   { opacity: 1; }
+  body.valley .valley-glow { opacity: 1; }
+
+  .card {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 760px;
+    background: rgba(18, 18, 30, 0.70);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 22px;
+    padding: 34px 36px 30px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+  }
+  .header { text-align: center; }
+  .time-badge {
+    display: inline-block;
+    background: rgba(80, 140, 220, 0.15);
+    border: 1px solid rgba(120, 180, 255, 0.25);
+    color: #9fc6ff;
+    font-size: 14px;
+    padding: 5px 14px;
+    border-radius: 999px;
+    letter-spacing: 1px;
+  }
+  .clock {
+    font-size: 44px;
+    font-weight: 700;
+    margin-top: 14px;
+    font-variant-numeric: tabular-nums;
+    color: #ffffff;
+  }
+  .clock small { font-size: 16px; font-weight: 400; color: #8fb4e8; margin-left: 8px; }
+  .period { font-size: 15px; color: #a9c4e8; margin-top: 8px; letter-spacing: 2px; }
+
+  .progress-wrap { margin-top: 24px; }
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    color: #93aac8;
+    margin-bottom: 7px;
+  }
+  .progress-label #progRemain { color: #b8d2f5; font-variant-numeric: tabular-nums; }
+  .progress-bar {
+    height: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    transition: width 1s linear;
+  }
+  .card.peak   .progress-fill { background: linear-gradient(90deg, #ff9d3c, #ffd28a); }
+  .card.valley .progress-fill { background: linear-gradient(90deg, #35b7f0, #8fe6ff); }
+
+  .hero { margin-top: 26px; text-align: center; }
+  .hero img {
+    width: 220px;
+    height: 220px;
+    object-fit: cover;
+    border-radius: 20px;
+    border: 2px solid rgba(120, 180, 255, 0.35);
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+    display: block;
+    margin: 0 auto;
+    background: #0a1420;
+  }
+  .title {
+    margin-top: 20px;
+    font-size: 40px;
+    font-weight: 800;
+    letter-spacing: 4px;
+  }
+  .subtitle {
+    margin-top: 8px;
+    font-size: 16px;
+    letter-spacing: 2px;
+    padding: 6px 16px;
+    border-radius: 999px;
+    display: inline-block;
+    font-weight: 600;
+  }
+  .title.peak   { color: #ff4d4f; }              /* 高峰：红 */
+  .title.valley { color: #52c41a; }              /* 谷时段：绿 */
+  .subtitle.peak   { background: rgba(255, 77, 79, 0.15);  color: #ff7875; border: 1px solid rgba(255, 77, 79, 0.45); }
+  .subtitle.valley { background: rgba(82, 196, 26, 0.13);  color: #73d13d; border: 1px solid rgba(82, 196, 26, 0.45); }
+  .desc { margin-top: 14px; font-size: 14px; color: #93aac8; line-height: 1.7; }
+
+  table {
+    width: 100%;
+    margin-top: 26px;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  caption { font-size: 14px; color: #93aac8; padding-bottom: 10px; letter-spacing: 1px; }
+  th, td {
+    padding: 12px 10px;
+    text-align: center;
+    border-bottom: 1px solid rgba(120, 180, 255, 0.12);
+  }
+  th { color: #b8d2f5; font-weight: 600; background: rgba(255, 255, 255, 0.03); }
+  td { color: #dce9fb; font-variant-numeric: tabular-nums; }
+  .model-cell { text-align: left; font-weight: 600; color: #7fc1ff; }
+  .note { margin-top: 16px; font-size: 12px; color: #6f87a6; line-height: 1.8; text-align: center; }
+</style>
+</head>
+<body>
+  <div class="glow peak-glow"></div>
+  <div class="glow valley-glow"></div>
+  <div class="card">
+    <div class="header">
+      <span class="time-badge">北京时间 · Asia/Shanghai</span>
+      <div class="clock" id="clock">--:--:--<small id="date"></small></div>
+      <div class="period" id="periodHint">高峰时段 09:00–12:00 / 14:00–18:00</div>
+
+      <div class="progress-wrap">
+        <div class="progress-label">
+          <span id="progLabel">当前时段进度</span>
+          <span id="progRemain">--</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="progFill"></div></div>
+      </div>
+    </div>
+
+    <div class="hero">
+      <img id="heroImg" src="梁文峰.png" alt="当前时段">
+      <div class="title peak" id="name">梁文峰</div>
+      <div class="subtitle" id="subtitle">当前处于高峰时段</div>
+      <div class="desc" id="desc">DeepSeek API 高峰时段价格（北京时间的</div>
+    </div>
+
+    <table>
+      <caption id="cap">价格单位：元 / 百万 tokens（高峰时段）</caption>
+      <thead>
+        <tr><th>模型</th><th>输入（缓存命中）</th><th>输入（缓存未命中）</th><th>输出</th></tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+
+    <div class="note">
+      数据来源：DeepSeek API 官方文档（api-docs.deepseek.com）<br>
+    </div>
+  </div>
+
+<script>
+  const PRICES = {
+    peak: {
+      title: "高峰时段",
+      cap: "价格单位：元 / 百万 tokens（高峰时段）",
+      desc: "",
+      subtitle: "当前处于高峰时段",
+      img: "梁文峰.png",
+      rows: [
+        ["deepseek-v4-flash", "0.10", "3.0", "9.0"],
+        ["deepseek-v4-pro",   "0.30", "9.0", "27.0"],
+        ["deepseek-v4-flash-vision-exp", "0.10", "3.0", "9.0"]
+      ]
+    },
+    valley: {
+      title: "空闲时段",
+      cap: "价格单位：元 / 百万 tokens（空闲时段）",
+      desc: "",
+      subtitle: "当前处于空闲（谷）时段",
+      img: "梁文谷.png",
+      rows: [
+        ["deepseek-v4-flash", "0.05", "1.5", "4.5"],
+        ["deepseek-v4-pro",   "0.15", "4.5", "13.5"],
+        ["deepseek-v4-flash-vision-exp", "0.05", "1.5", "4.5"]
+      ]
+    }
+  };
+
+  const $ = id => document.getElementById(id);
+  const clockEl = $("clock"), dateEl = $("date"), periodHint = $("periodHint");
+  const heroImg = $("heroImg"), nameEl = $("name"), subtitleEl = $("subtitle"), descEl = $("desc");
+  const cap = $("cap"), tbody = $("tbody");
+  const card = document.querySelector(".card");
+  const progLabel = $("progLabel"), progRemain = $("progRemain"), progFill = $("progFill");
+
+  // 判断当前是否处于高峰时段（北京时间）
+  function isPeakHour(date) {
+    const hour = date.getHours();
+    return (hour >= 9 && hour < 12) || (hour >= 14 && hour < 18);
+  }
+
+  function tick() {
+    const now = new Date();
+    const bj = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
+    const pad = n => String(n).padStart(2, "0");
+    clockEl.innerHTML = `${pad(bj.getHours())}:${pad(bj.getMinutes())}:${pad(bj.getSeconds())}` +
+      `<small>${bj.getFullYear()}-${pad(bj.getMonth()+1)}-${pad(bj.getDate())} 周${"日一二三四五六"[bj.getDay()]}</small>`;
+
+    const peak = isPeakHour(bj);
+    const key = peak ? "peak" : "valley";
+    const p = PRICES[key];
+
+    heroImg.src = p.img;
+    nameEl.textContent = peak ? "梁文峰" : "梁文谷";
+    subtitleEl.textContent = p.subtitle;
+    descEl.textContent = p.desc;
+
+    // 名称颜色随时段切换
+    nameEl.className = "title " + key;
+    document.querySelector(".subtitle").className = "subtitle " + key;
+
+    // 时段提示
+    periodHint.textContent = peak
+      ? "🔺 高峰时段：9:00–12:00 / 14:00–18:00"
+      : "🔻 空闲时段（谷时段）：高峰时段之外";
+
+    // 背景随时段变色 + 进度条
+    document.body.classList.toggle("peak", key === "peak");
+    document.body.classList.toggle("valley", key === "valley");
+    card.classList.toggle("peak", key === "peak");
+    card.classList.toggle("valley", key === "valley");
+    const totMin = bj.getHours() * 60 + bj.getMinutes() + bj.getSeconds() / 60;
+    const blocks = [
+      [0, 540, false],    // 0:00 - 9:00   空闲
+      [540, 720, true],   // 9:00 - 12:00  高峰
+      [720, 840, false],  // 12:00 - 14:00 空闲
+      [840, 1080, true],  // 14:00 - 18:00 高峰
+      [1080, 1440, false] // 18:00 - 24:00 空闲
+    ];
+    let cur = blocks[blocks.length - 1];
+    for (const b of blocks) { if (totMin >= b[0] && totMin < b[1]) { cur = b; break; } }
+    const ratio = Math.min(1, (totMin - cur[0]) / (cur[1] - cur[0]));
+    const remainMin = Math.max(0, cur[1] - totMin);
+    progFill.style.width = (ratio * 100).toFixed(2) + "%";
+    progLabel.textContent = peak ? "🔺 高峰时段进度" : "🔻 空闲（谷）时段进度";
+    const rh = Math.floor(remainMin / 60), rm = Math.floor(remainMin % 60);
+    progRemain.textContent = "距" + (peak ? "谷时段" : "高峰时段") + "还有 " +
+      (rh > 0 ? rh + "小时" + String(rm).padStart(2, "0") + "分" : rm + "分钟");
+
+    render(key);
+  }
+
+  function render(key) {
+    const p = PRICES[key];
+    cap.textContent = p.cap;
+    tbody.innerHTML = p.rows.map(r =>
+      `<tr><td class="model-cell">${r[0]}</td><td>${r[1]} 元</td><td>${r[2]} 元</td><td>${r[3]} 元</td></tr>`
+    ).join("");
+  }
+
+  tick();           // 立即执行一次
+  setInterval(tick, 1000);
+</script>
+</body>
+</html>
