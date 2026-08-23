@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DeepSeek现在价格</title>
+<title>DeepSeek 峰谷定价</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -135,6 +135,33 @@
   td { color: #dce9fb; font-variant-numeric: tabular-nums; }
   .model-cell { text-align: left; font-weight: 600; color: #7fc1ff; }
   .note { margin-top: 16px; font-size: 12px; color: #6f87a6; line-height: 1.8; text-align: center; }
+
+  /* ===== 自适应缩放：窗口越窄，展示越少、越重要 ===== */
+  @media (max-width: 640px) {
+    .card { padding: 20px 18px; }
+    .clock { font-size: 34px; }
+    .clock small { display: block; margin: 4px 0 0; font-size: 13px; }
+    .title { font-size: 30px; letter-spacing: 3px; }
+    .hero img { width: 150px; height: 150px; }
+    .note { display: none; }               /* 先隐藏最次要的底部说明 */
+    .period { font-size: 14px; }
+    .progress-wrap { margin-top: 16px; }
+    table { margin-top: 18px; }
+    th, td { padding: 9px 6px; font-size: 13px; }
+  }
+
+  @media (max-width: 480px) {
+    .card { padding: 14px 12px; border-radius: 14px; }
+    .clock { font-size: 27px; }
+    .title { font-size: 25px; letter-spacing: 2px; }
+    .subtitle { font-size: 14px; padding: 4px 12px; }
+    .period { font-size: 12px; letter-spacing: 1px; }
+    .hero { margin-top: 14px; }
+    .hero img { display: none; }           /* 再隐藏装饰性图片 */
+    .progress-bar { display: none; }       /* 隐藏进度条，保留文字倒计时 */
+    .progress-label { margin-bottom: 0; }
+    th, td { padding: 7px 3px; font-size: 11px; }
+  }
 </style>
 </head>
 <body>
