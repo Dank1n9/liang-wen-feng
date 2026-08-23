@@ -27,14 +27,14 @@
     transition: opacity 1.5s ease;
   }
   .peak-glow {
-    background: radial-gradient(1200px 600px at 20% -10%, #8c2626 0%, transparent 60%),
-                radial-gradient(1000px 500px at 110% 110%, #6b1a1a 0%, transparent 55%),
-                #3a1212;
+    background: radial-gradient(1200px 600px at 20% -10%, #c05555 0%, transparent 60%),
+                radial-gradient(1000px 500px at 110% 110%, #a04040 0%, transparent 55%),
+                #7a3030;
   }
   .valley-glow {
-    background: radial-gradient(1200px 600px at 20% -10%, #17482f 0%, transparent 60%),
-                radial-gradient(1000px 500px at 110% 110%, #0f3a24 0%, transparent 55%),
-                #122b1c;
+    background: radial-gradient(1200px 600px at 20% -10%, #3f8f5f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 110% 110%, #2f7a4e 0%, transparent 55%),
+                #24503a;
   }
   body.peak   .peak-glow   { opacity: 1; }
   body.valley .valley-glow { opacity: 1; }
@@ -52,16 +52,6 @@
     backdrop-filter: blur(8px);
   }
   .header { text-align: center; }
-  .time-badge {
-    display: inline-block;
-    background: rgba(80, 140, 220, 0.15);
-    border: 1px solid rgba(120, 180, 255, 0.25);
-    color: #9fc6ff;
-    font-size: 14px;
-    padding: 5px 14px;
-    border-radius: 999px;
-    letter-spacing: 1px;
-  }
   .clock {
     font-size: 44px;
     font-weight: 700;
@@ -128,7 +118,6 @@
   .title.valley { color: #52c41a; }              /* 谷时段：绿 */
   .subtitle.peak   { background: rgba(255, 77, 79, 0.15);  color: #ff7875; border: 1px solid rgba(255, 77, 79, 0.45); }
   .subtitle.valley { background: rgba(82, 196, 26, 0.13);  color: #73d13d; border: 1px solid rgba(82, 196, 26, 0.45); }
-  .desc { margin-top: 14px; font-size: 14px; color: #93aac8; line-height: 1.7; }
 
   table {
     width: 100%;
@@ -153,7 +142,6 @@
   <div class="glow valley-glow"></div>
   <div class="card">
     <div class="header">
-      <span class="time-badge">北京时间 · Asia/Shanghai</span>
       <div class="clock" id="clock">--:--:--<small id="date"></small></div>
       <div class="period" id="periodHint">高峰时段 09:00–12:00 / 14:00–18:00</div>
 
@@ -170,7 +158,6 @@
       <img id="heroImg" src="梁文峰.png" alt="当前时段">
       <div class="title peak" id="name">梁文峰</div>
       <div class="subtitle" id="subtitle">当前处于高峰时段</div>
-      <div class="desc" id="desc">DeepSeek API 高峰时段价格（北京时间的</div>
     </div>
 
     <table>
@@ -182,7 +169,7 @@
     </table>
 
     <div class="note">
-      数据来源：DeepSeek API 官方文档（api-docs.deepseek.com）<br>
+      数据来源：DeepSeek API 官方文档（api-docs.deepseek.com）
     </div>
   </div>
 
@@ -191,7 +178,6 @@
     peak: {
       title: "高峰时段",
       cap: "价格单位：元 / 百万 tokens（高峰时段）",
-      desc: "",
       subtitle: "当前处于高峰时段",
       img: "梁文峰.png",
       rows: [
@@ -203,7 +189,6 @@
     valley: {
       title: "空闲时段",
       cap: "价格单位：元 / 百万 tokens（空闲时段）",
-      desc: "",
       subtitle: "当前处于空闲（谷）时段",
       img: "梁文谷.png",
       rows: [
@@ -215,75 +200,123 @@
   };
 
   const $ = id => document.getElementById(id);
-  const clockEl = $("clock"), dateEl = $("date"), periodHint = $("periodHint");
-  const heroImg = $("heroImg"), nameEl = $("name"), subtitleEl = $("subtitle"), descEl = $("desc");
+  const clockEl = $("clock"), periodHint = $("periodHint");
+  const heroImg = $("heroImg"), nameEl = $("name"), subtitleEl = $("subtitle");
   const cap = $("cap"), tbody = $("tbody");
-  const card = document.querySelector(".card");
+  const card = document.querySelector(".card"), subtitleDom = document.querySelector(".subtitle");
   const progLabel = $("progLabel"), progRemain = $("progRemain"), progFill = $("progFill");
 
-  // 判断当前是否处于高峰时段（北京时间）
-  function isPeakHour(date) {
-    const hour = date.getHours();
-    return (hour >= 9 && hour < 12) || (hour >= 14 && hour < 18);
+  // 北京时间（UTC+8，无夏令时，固定偏移最可靠）
+  function bjNow() {
+    return new Date(Date.now() + 8 * 3600 * 1000); // 读取时一律用 getUTC* 方法
   }
 
-  function tick() {
-    const now = new Date();
-    const bj = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
-    const pad = n => String(n).padStart(2, "0");
-    clockEl.innerHTML = `${pad(bj.getHours())}:${pad(bj.getMinutes())}:${pad(bj.getSeconds())}` +
-      `<small>${bj.getFullYear()}-${pad(bj.getMonth()+1)}-${pad(bj.getDate())} 周${"日一二三四五六"[bj.getDay()]}</small>`;
+  // 周末（周六/周日）全天不计峰谷
+  function isWeekend(d) {
+    const w = d.getUTCDay();
+    return w === 0 || w === 6;
+  }
 
-    const peak = isPeakHour(bj);
+  // 判断当前是否处于高峰时段：周末恒为低谷，工作日按 9-12、14-18 判断
+  function isPeakHour(d) {
+    if (isWeekend(d)) return false;
+    const h = d.getUTCHours();
+    return (h >= 9 && h < 12) || (h >= 14 && h < 18);
+  }
+
+  // 分钟 → "X小时YY分" 显示
+  function fmt(min) {
+    const h = Math.floor(min / 60), m = Math.floor(min % 60);
+    return h > 0 ? h + "小时" + String(m).padStart(2, "0") + "分" : m + "分钟";
+  }
+
+  let lastKey = null;
+
+  function tick() {
+    const bj = bjNow();
+    const pad = n => String(n).padStart(2, "0");
+    clockEl.innerHTML = `${pad(bj.getUTCHours())}:${pad(bj.getUTCMinutes())}:${pad(bj.getUTCSeconds())}` +
+      `<small>${bj.getUTCFullYear()}-${pad(bj.getUTCMonth()+1)}-${pad(bj.getUTCDate())} 周${"日一二三四五六"[bj.getUTCDay()]}</small>`;
+
+    const weekend = isWeekend(bj);
+    const peak = isPeakHour(bj);          // 周末自动为 false
     const key = peak ? "peak" : "valley";
     const p = PRICES[key];
 
     heroImg.src = p.img;
     nameEl.textContent = peak ? "梁文峰" : "梁文谷";
     subtitleEl.textContent = p.subtitle;
-    descEl.textContent = p.desc;
 
-    // 名称颜色随时段切换
+    // 名称 / 标签颜色随时段切换
     nameEl.className = "title " + key;
-    document.querySelector(".subtitle").className = "subtitle " + key;
+    subtitleDom.className = "subtitle " + key;
 
     // 时段提示
-    periodHint.textContent = peak
-      ? "🔺 高峰时段：9:00–12:00 / 14:00–18:00"
-      : "🔻 空闲时段（谷时段）：高峰时段之外";
+    periodHint.textContent = weekend
+      ? "🟢 今日周末 · 全天按低谷时段计费"
+      : (peak
+          ? "🔺 高峰时段：9:00–12:00 / 14:00–18:00"
+          : "🔻 空闲时段（谷时段）：高峰时段之外");
 
-    // 背景随时段变色 + 进度条
+    // 背景随时段变色
     document.body.classList.toggle("peak", key === "peak");
     document.body.classList.toggle("valley", key === "valley");
     card.classList.toggle("peak", key === "peak");
     card.classList.toggle("valley", key === "valley");
-    const totMin = bj.getHours() * 60 + bj.getMinutes() + bj.getSeconds() / 60;
-    const blocks = [
-      [0, 540, false],    // 0:00 - 9:00   空闲
-      [540, 720, true],   // 9:00 - 12:00  高峰
-      [720, 840, false],  // 12:00 - 14:00 空闲
-      [840, 1080, true],  // 14:00 - 18:00 高峰
-      [1080, 1440, false] // 18:00 - 24:00 空闲
-    ];
-    let cur = blocks[blocks.length - 1];
-    for (const b of blocks) { if (totMin >= b[0] && totMin < b[1]) { cur = b; break; } }
-    const ratio = Math.min(1, (totMin - cur[0]) / (cur[1] - cur[0]));
-    const remainMin = Math.max(0, cur[1] - totMin);
+
+    // 进度条：当前连续时段已过比例 + 距下一切换点倒计时（跨天连续，不重置）
+    const nowTs = Date.now(); // 真实 UTC 时间戳（bj.getTime() 带 +8h 偏移，不能用于绝对时间计算）
+    const day0 = Date.UTC(bj.getUTCFullYear(), bj.getUTCMonth(), bj.getUTCDate());
+    let segStart, segEnd, labelText, remainText;
+    if (peak) {
+      // 高峰时段（工作日 9:00-12:00 / 14:00-18:00）
+      segStart = day0 + (bj.getUTCHours() < 12 ? 1 : 6) * 3600000; // 北京9点=UTC1点 / 14点=UTC6点
+      segEnd   = day0 + (bj.getUTCHours() < 12 ? 4 : 10) * 3600000; // 北京12点=UTC4点 / 18点=UTC10点
+      labelText = "🔺 高峰时段进行中";
+      remainText = "距高峰结束还有 " + fmt((segEnd - nowTs) / 60000);
+    } else if (!weekend && bj.getUTCHours() >= 12 && bj.getUTCHours() < 14) {
+      // 工作日白天谷段 12:00-14:00
+      segStart = day0 + 4 * 3600000; // 北京12点=UTC4点
+      segEnd   = day0 + 6 * 3600000; // 北京14点=UTC6点
+      labelText = "🔻 低谷时段";
+      remainText = "距高峰时段还有 " + fmt((segEnd - nowTs) / 60000);
+    } else {
+      // 夜间谷段（18:00-次日9:00）与周末：连续低谷
+      // 起点：最近一个过去的 工作日18:00
+      for (let back = 0; back < 8; back++) {
+        const t = day0 - back * 86400000;
+        const wd = new Date(t).getUTCDay();
+        if (wd >= 1 && wd <= 5) {
+          const cand = t + 10 * 3600000; // 北京18点=UTC10点
+          if (cand < nowTs) { segStart = cand; break; }
+        }
+      }
+      // 终点：下一个晚于当前时刻的 工作日9:00
+      for (let fwd = 0; fwd < 8; fwd++) {
+        const t = day0 + fwd * 86400000;
+        const wd = new Date(t).getUTCDay();
+        if (wd >= 1 && wd <= 5) {
+          const cand = t + 1 * 3600000; // 北京9点=UTC1点
+          if (cand > nowTs) { segEnd = cand; break; }
+        }
+      }
+      labelText = "🔻 低谷时段";
+      remainText = "距高峰时段还有 " + fmt((segEnd - nowTs) / 60000);
+    }
+
+    const ratio = Math.max(0, Math.min(1, (nowTs - segStart) / (segEnd - segStart)));
     progFill.style.width = (ratio * 100).toFixed(2) + "%";
-    progLabel.textContent = peak ? "🔺 高峰时段进度" : "🔻 空闲（谷）时段进度";
-    const rh = Math.floor(remainMin / 60), rm = Math.floor(remainMin % 60);
-    progRemain.textContent = "距" + (peak ? "谷时段" : "高峰时段") + "还有 " +
-      (rh > 0 ? rh + "小时" + String(rm).padStart(2, "0") + "分" : rm + "分钟");
+    progLabel.textContent = labelText;
+    progRemain.textContent = remainText;
 
-    render(key);
-  }
-
-  function render(key) {
-    const p = PRICES[key];
-    cap.textContent = p.cap;
-    tbody.innerHTML = p.rows.map(r =>
-      `<tr><td class="model-cell">${r[0]}</td><td>${r[1]} 元</td><td>${r[2]} 元</td><td>${r[3]} 元</td></tr>`
-    ).join("");
+    // 价格表仅在时段变化时刷新（避免每秒重建 DOM）
+    if (lastKey !== key) {
+      lastKey = key;
+      cap.textContent = p.cap;
+      tbody.innerHTML = p.rows.map(r =>
+        `<tr><td class="model-cell">${r[0]}</td><td>${r[1]} 元</td><td>${r[2]} 元</td><td>${r[3]} 元</td></tr>`
+      ).join("");
+    }
   }
 
   tick();           // 立即执行一次
